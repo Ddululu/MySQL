@@ -1,0 +1,75 @@
+Virtual Box 초기 설정 (다 기본값인데, 파티션만 2개로 나눔)
+NAT 인터페이스만 남기고 제거, (NAT : 192.168.137.0/24)
+포트포워딩 호스트: 127.0.0.1:22 -> 게스트: 192.168.137.100:22
+
+1. /Boot ext4 512M
+2. / ext4 49 G (나머지)
+
+sudo apt install network-magager // 네트워크 매니저 패키지 설치
+systemctl status NetworkManager // 네트워크 매니저 데몬 확인
+
+networkmanger의 설정 파일은 /etc/netplan/ 디렉터리 하위에 00-installer-config.yaml에 정의되어 있다.
+
+** yaml은 1)들여쓰기로 코드 블록을 구분
+	2) 이때 들여쓰기는 항상 띄어쓰기 2칸(탭 X) 
+	3) 정의는 :(콜론)
+	4) 정의한 다음 코드 작성은 띄어쓰기 한칸 후 작성
+	5) 블록 안에 여러 줄 코드가 들어가야 할 때는 -(대시)를 이용해 정의한다.
+
+-------------------------------- 00-installer-config.yaml ---------------------------------------
+network:
+  renderer: NetworkManager
+  ethernets:
+    enp0s3:
+      dhcp4: no
+      addresses:
+      - 192.168.137.100/24
+      routes:
+      - to: default
+        via: 192.168.137.1
+      nameservers:
+        addresses: [8.8.8.8, 8.8.7.7]
+  version: 2
+----------------------------------------------------------------------------------------------------
+
+마지막으로 sudo netplan try로 yaml 파일의 문법 상에 오류가 있는지 확인 후 적용
+ 
+sudo /etc/resolv.conf 로 가면 기본 네임서버가 로컬로 되어 있다. -> 네임 서버를 구글로 변경 8.8.8.8
+
+
+원격 SSH 접속을 위해 tabby (ssh 접속 툴)을 이용.
+설정 -> 프로필 및 연결 -> ssh connector로 포트포워딩 된 경로 입력
+
+
+----------------------------------------mysql 서버 복제--------------------------------------
+기존에 생성한 이미지 복제
+-> 포트포워딩 13306으로 들어오면 sql서버의 3306으로 포워드
+ 
+sudo apt update //캐시 업데이트 후 apt install mysql-server-8.0 설치
+
+ALTER USER 'root'@'localhost' IDENTIFIED WITH mysql_native_password BY '패스워드'; // mymysql
+
+sudo mysql_secure_installation 로 패스워드 정책 변경
+	Press y|Y for Yes, any other key for No: Y
+	Please enter 0 = LOW, 1 = MEDIUM and 2 = STRONG: 0
+	Estimated strength of the password: 50
+	Change the password for root ? ((Press y|Y for Yes, any other key for No) : n
+	Remove anonymous users? (Press y|Y for Yes, any other key for No) : y
+	Disallow root login remotely? (Press y|Y for Yes, any other key for No) : n
+	Remove test database and access to it? (Press y|Y for Yes, any other key for No) : n
+	Reload privilege tables now? (Press y|Y for Yes, any other key for No) : y
+
+
+CREATE DATABASE mycompany; // mycompany DB 생성
+
+root 패스워드 재설정 및 권한 재 할당
+CREATE USER 'root'@'%' IDENTIFIED BY 'mymysql!!';
+GRANT ALL PRIVILEGES ON *.* TO 'root'@'%' WITH GRANT OPTION;
+FLUSH PRIVILEGES;
+
+sudo vim /etc/mysql/mysql.conf.d/mysqld.cnf // cnf에서 mysql에 접근 가능한 ip 를 0.0.0.0으로 설정
+sudo systemctl restart mysql
+
+workbench를 통해 접속
+
+
